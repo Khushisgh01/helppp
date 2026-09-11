@@ -241,7 +241,6 @@ export default function SatQueryChat({ onBack, onOpenProfile }) {
           name: file.name,
           date: '',
           imageId,
-          source: imageId ? 'model1' : undefined,
         };
       });
       if (files.length > room) {
@@ -752,7 +751,7 @@ export default function SatQueryChat({ onBack, onOpenProfile }) {
                       className="w-16 h-16 object-cover"
                       onError={(e) => {
                         e.currentTarget.onerror = null;
-                        e.currentTarget.src = model1PlaceholderDataUrl(img.imageId || img.name);
+                        e.currentTarget.src = model1PlaceholderDataUrl();
                       }}
                     />
                     <button
@@ -940,7 +939,7 @@ function PendingStage({ images }) {
             className="w-full h-full object-cover"
             onError={(e) => {
               e.currentTarget.onerror = null;
-              e.currentTarget.src = model1PlaceholderDataUrl(img.imageId || img.name);
+              e.currentTarget.src = model1PlaceholderDataUrl();
             }}
           />
         ))}
@@ -957,14 +956,9 @@ function PendingStage({ images }) {
         className="absolute inset-0 w-full h-full object-cover"
         onError={(e) => {
           e.currentTarget.onerror = null;
-          e.currentTarget.src = model1PlaceholderDataUrl(img.imageId || img.name);
+          e.currentTarget.src = model1PlaceholderDataUrl();
         }}
       />
-      {img.imageId && (
-        <span className="absolute bottom-3 left-3 font-['Space_Mono'] text-[9px] text-[#F2EDE6]/70 bg-[#0A0A0F]/60 px-2 py-1 rounded-[3px]">
-          Model 1 · {img.imageId}
-        </span>
-      )}
     </div>
   );
 }
@@ -1040,7 +1034,7 @@ function ImageStage({
         className="absolute inset-0 w-full h-full object-cover"
         onError={(e) => {
           e.currentTarget.onerror = null;
-          e.currentTarget.src = model1PlaceholderDataUrl(imgA.imageId || imgA.name);
+          e.currentTarget.src = model1PlaceholderDataUrl();
         }}
       />
       {message.detections?.map((d) => {
