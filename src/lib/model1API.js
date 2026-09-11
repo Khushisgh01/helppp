@@ -1,4 +1,4 @@
-import { MODEL1_FALLBACK_PAIRS, model1SceneLabel, pairForImageId, parseMcqOptions } from './model1Catalog';
+import { parseMcqOptions } from './model1Catalog';
 
 const REMOTE_DEFAULT = 'https://satquery-model1-vqa-api.onrender.com';
 
@@ -10,15 +10,14 @@ export function model1ApiBase() {
   return REMOTE_DEFAULT;
 }
 
-export function model1PlaceholderDataUrl(imageId) {
-  const id = imageId || 'scene';
-  const label = model1SceneLabel(id);
+// Generic fallback shown in place of a broken/expired image preview.
+// Carries no scene metadata — just tells the user to reattach the image.
+export function model1PlaceholderDataUrl() {
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 800">
     <rect width="800" height="800" fill="#14141c"/>
     <rect x="24" y="24" width="752" height="752" fill="none" stroke="#D4A843" stroke-opacity="0.35" stroke-width="2"/>
-    <text x="400" y="355" fill="#D4A843" font-family="ui-monospace, monospace" font-size="28" text-anchor="middle">${label}</text>
-    <text x="400" y="400" fill="#F2EDE6" font-family="ui-monospace, monospace" font-size="18" text-anchor="middle">${id}</text>
-    <text x="400" y="445" fill="#F2EDE6" fill-opacity="0.45" font-family="ui-monospace, monospace" font-size="14" text-anchor="middle">Satellite scene</text>
+    <text x="400" y="390" fill="#D4A843" font-family="ui-monospace, monospace" font-size="22" text-anchor="middle">Image unavailable</text>
+    <text x="400" y="430" fill="#F2EDE6" fill-opacity="0.45" font-family="ui-monospace, monospace" font-size="14" text-anchor="middle">Reattach the scene to continue</text>
   </svg>`;
   return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
 }
@@ -27,9 +26,14 @@ export function model1ImageUrl(imageId) {
   if (!imageId) return '';
   const base = import.meta.env.VITE_MODEL1_IMAGE_BASE_URL;
   if (base) return `${String(base).replace(/\/$/, '')}/${imageId}`;
-  return model1PlaceholderDataUrl(imageId);
+  return model1PlaceholderDataUrl();
 }
 
+// Internal only: the hosted Model 1 backend currently serves a fixed set
+// of scenes by id rather than accepting arbitrary uploaded bytes, so we
+// still need to resolve which scene id a file corresponds to in order to
+// route the request at all. This has no effect on what question is sent —
+// the user's own typed question always goes through unmodified.
 export function resolveModel1ImageId(images = []) {
   const first = images[0];
   if (!first) return null;
@@ -37,41 +41,6 @@ export function resolveModel1ImageId(images = []) {
   const name = first.name || first.file?.name || '';
   const match = String(name).match(/demo_\d+\.png/i);
   return match ? match[0].toLowerCase() : null;
-}
-
-let catalogPromise = null;
-let lastCatalog = MODEL1_FALLBACK_PAIRS;
-
-function canonicalQuestion(q) {
-  return String(q || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-export async function fetchModel1Catalog() {
-  if (!catalogPromise) {
-    catalogPromise = (async () => {
-      const res = await fetch(`${model1ApiBase()}/model1/supported`);
-      if (!res.ok) throw new Error(`Model 1 catalog failed (${res.status})`);
-      const data = await res.json();
-      if (!Array.isArray(data) || data.length === 0) throw new Error('Model 1 catalog was empty');
-      lastCatalog = data;
-      return data;
-    })().catch((err) => {
-      catalogPromise = null;
-      throw err;
-    });
-  }
-  return catalogPromise;
-}
-
-export async function loadModel1Catalog() {
-  try {
-    return await fetchModel1Catalog();
-  } catch {
-    return MODEL1_FALLBACK_PAIRS;
-  }
 }
 
 function formatAnswer(answer, question) {
@@ -96,14 +65,6 @@ function formatAnswer(answer, question) {
   return { text: raw, matched: true };
 }
 
-function exactQuestionForImage(imageId, question) {
-  const pair = pairForImageId(lastCatalog, imageId) || pairForImageId(MODEL1_FALLBACK_PAIRS, imageId);
-  if (pair && canonicalQuestion(pair.question) === canonicalQuestion(question)) {
-    return pair.question;
-  }
-  return question;
-}
-
 export async function queryModel1Vqa(question, images) {
   const imageId = resolveModel1ImageId(images);
   if (!imageId) {
@@ -120,9 +81,11 @@ export async function queryModel1Vqa(question, images) {
   const res = await fetch(`${model1ApiBase()}/model1/query`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
+    // The question sent is always exactly what the user typed — no
+    // catalog lookup or rewriting happens here anymore.
     body: JSON.stringify({
       image_id: imageId,
-      question: exactQuestionForImage(imageId, question),
+      question,
     }),
   });
   if (!res.ok) throw new Error(`Model 1 request failed (${res.status})`);
